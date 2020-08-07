@@ -42,7 +42,7 @@ func (c *Conn) ReadPacket() (*Packet, error) {
 		return nil, err
 	}
 
-	if header.Size > 4096 {
+	if header.Size-int32(PacketLengthOffset) > 4096 {
 		return nil, ErrInvalidRead
 	}
 

@@ -10,6 +10,8 @@ import (
 const (
 	PacketPaddingSize uint8 = 2 // Size of Packet's padding.
 	PacketHeaderSize  uint8 = 8 // Size of Packet's header.
+
+	PacketLengthOffset uint8 = PacketHeaderSize + PacketPaddingSize
 )
 
 const (

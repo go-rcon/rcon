@@ -23,6 +23,7 @@ func main() {
 		fmt.Println("connection error:", err)
 		return
 	}
+	defer c.Close()
 
 	resp, err := c.RunCommand(cmd)
 	if err != nil {

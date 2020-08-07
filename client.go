@@ -1,6 +1,9 @@
 package rcon
 
-import "fmt"
+import (
+	"bytes"
+	"fmt"
+)
 
 type Client struct {
 	inner *Conn
@@ -48,16 +51,55 @@ func (c *Client) RunCommand(cmd string) (string, error) {
 		return "", err
 	}
 
-	packet, err := c.inner.ReadPacket()
-	if err != nil {
-		return "", err
-	} else if packet.Header.Challenge != execPacket.Header.Challenge {
-		return "", ErrInvalidRead
-	} else if packet.Header.Type != ResponseValue {
-		return "", ErrInvalidRead
+	// We use a sentinel packet to figure out when we're done. The help command
+	// should always succeed and *should* be under 4096 characters so it works
+	// well for this use case.
+	sentinelPacket := NewPacket(Exec, "help")
+
+	var out bytes.Buffer
+	var first bool = true
+
+	for {
+		packet, err := c.inner.ReadPacket()
+		if err != nil {
+			return "", err
+		} else if packet.Header.Challenge == sentinelPacket.Header.Challenge {
+			break
+		} else if packet.Header.Challenge != execPacket.Header.Challenge {
+			return "", ErrInvalidRead
+		} else if packet.Header.Type != ResponseValue {
+			return "", ErrInvalidRead
+		}
+
+		out.WriteString(packet.Body)
+
+		// If we got to this point, we should be done, but there could be a
+		// leftover sentinel packet to read, so make sure we handle that.
+		if packet.Header.Size != 4106 {
+			if !first {
+				packet, err := c.inner.ReadPacket()
+				if err != nil {
+					return "", err
+				} else if packet.Header.Challenge != sentinelPacket.Header.Challenge {
+					return "", ErrInvalidRead
+				}
+			}
+
+			break
+		}
+
+		// If this was our first loop iteration, write our sentinel packet to
+		// the stream so we know when we can stop looping.
+		if first {
+			err = c.inner.WritePacket(sentinelPacket)
+			if err != nil {
+				return "", err
+			}
+			first = false
+		}
 	}
 
-	return packet.Body, nil
+	return out.String(), nil
 }
 
 func (c *Client) Close() error {
